@@ -1,197 +1,148 @@
-import tkinter as tk
-from tkinter import messagebox
 import json
-from produtos import produtos
+from flask import Flask, render_template, request, redirect, url_for
 
-# PASTA COM CLIENTES
+# Tabela de produtos e preços
+produtos = {
+    "Tartelette Bacalhau": 2.45,
+    "Tartelette Figo": 2.45,
+    "Tartelette Frango": 1.15,
+    "Quiche Alho Poro": 1.35,
+    "Quiche Marguerita": 1.35,
+    "Quiche Carne de Panela": 1.35,
+    "Canape Pera": 2.45,
+    "Canape Camarão": 2.45,
+    "Canape Salame": 2.45,
+    "Bolinha Carne de Panela": 2.15,
+    "Bolinha Bacalhau": 2.45,
+    "Kibe": 1.35,
+    "Caprese": 2.15,
+    "Prensadinho": 2.15,
+    "Panquequinha": 2.45,
+    "Empanada": 1.35,
+    "Palito Folhado": 2.15,
+    "Doguinho": 2.15,
+    "Torta Fria": 98.00,
+    "Cheesecake Frutas Vermelhas": 98.00,
+    "Cheesecake Frutas Maracuja": 98.00,
+    "Cheesecake Frutas Goiaba": 98.00
+}
+
+# Pasta com clientes
 ARQUIVO_CLIENTES = "clientes.json"
 
-
-# CARREGA OS DADOS DOS CLIENTES DO JSON
+# Carrega os dados dos clientes do JSON
 def carregar_clientes():
     try:
         with open(ARQUIVO_CLIENTES, "r") as file:
-            return json.load(file)
+            data = file.read().strip()
+            if not data:
+                return {}
+            return json.loads(data)
     except FileNotFoundError:
         return {}
+    except json.JSONDecodeError:
+        print("Arquivo JSON corrompido. Criando um novo arquivo.")
+        return {}
 
-
-# SALVA OS DADOS DOS CLIENTES NO JSON
+# Salva os dados dos clientes no JSON
 def salvar_clientes():
     with open(ARQUIVO_CLIENTES, "w") as file:
         json.dump(clientes, file, indent=4)
 
-
-# DICT QUE ARMAZENA AS  INFOS DOS CLIENTES
+# Dict que armazena as infos dos clientes
 clientes = carregar_clientes()
 
+app = Flask(__name__)
 
+@app.route('/')
+def index():
+    clientes_com_pedidos = []
+    total_geral = 0
+    quantidade_total_produtos = {produto: 0 for produto in produtos.keys()}
+
+    # Preparando os dados para o HTML
+    for nome, info in clientes.items():
+        if 'total_venda' not in info:
+            info['total_venda'] = 0
+
+        # Calcula o total do pedido do cliente
+        if info['pedido']:
+            info['total_venda'] = sum(produtos.get(produto, 0) * quantidade for produto, quantidade in info['pedido'].items())
+
+            # Soma as quantidades de produtos no total geral
+            for produto, quantidade in info['pedido'].items():
+                quantidade_total_produtos[produto] += quantidade
+
+        total_geral += info['total_venda']
+
+        # Adiciona informações do cliente para renderizar no template
+        clientes_com_pedidos.append({
+            'nome': nome,
+            'telefone': info['telefone'],
+            'local_entrega': info['local_entrega'],
+            'data_entrega': info['data_entrega'],
+            'hora_entrega': info['hora_entrega'],
+            'pedido': info['pedido'],
+            'total_venda': info['total_venda']
+        })
+
+    # Renderiza o HTML
+    return render_template(
+        'index.html',
+        clientes=clientes_com_pedidos,
+        produtos=produtos,
+        total_geral=total_geral,
+        quantidade_total_produtos=quantidade_total_produtos
+    )
+
+@app.route('/cadastrar_cliente', methods=['POST'])
 def cadastrar_cliente():
-    nome = entry_nome.get()
-    telefone = entry_telefone.get()
-    local_entrega = entry_local_entrega.get()
-    data_entrega = entry_data_entrega.get()
-    hora_entrega = entry_hora_entrega.get()
+    nome = request.form['nome']
+    telefone = request.form['telefone']
+    local_entrega = request.form['local_entrega']
+    data_entrega = request.form['data_entrega']
+    hora_entrega = request.form['hora_entrega']
 
     if not nome or not telefone or not local_entrega or not data_entrega or not hora_entrega:
-        messagebox.showerror("Erro", "Todos os campos são obrigatórios!")
-        return
+        return "Todos os campos são obrigatórios!", 400
 
     clientes[nome] = {
         "telefone": telefone,
         "local_entrega": local_entrega,
         "data_entrega": data_entrega,
         "hora_entrega": hora_entrega,
-        "pedido": {}
+        "pedido": {},
+        "total_venda": 0
     }
 
-    #SALVA CLIENTE NO JSON
     salvar_clientes()
+    return redirect(url_for('index'))
 
-    messagebox.showinfo("Sucesso", "Cliente cadastrado com sucesso!")
-
-
+@app.route('/cadastrar_pedido', methods=['POST'])
 def cadastrar_pedido():
-    nome_cliente = entry_cliente_pedido.get()
-
+    nome_cliente = request.form['nome_cliente']
     if nome_cliente not in clientes:
-        messagebox.showerror("Erro", "Cliente não encontrado!")
-        return
+        return "Cliente não encontrado!", 404
 
-    janela_pedido = tk.Toplevel(root)  # <--- CRIA UMA JANELA SECUNDARIA
-    janela_pedido.title(f"Pedido para {nome_cliente}")
+    produto = request.form['produto']
+    quantidade = int(request.form['quantidade'])
 
-    quantidade_total = 0
+    if produto not in produtos:
+        return "Produto inválido!", 400
 
-    #MOSTRA OS PRODUTOS DISPONIVEIS
-    produto_var = tk.StringVar()
-    produto_menu = tk.OptionMenu(janela_pedido, produto_var, *produtos.keys())
-    produto_menu.pack()
-
-    quantidade_var = tk.IntVar()
-    quantidade_entry = tk.Entry(janela_pedido, textvariable=quantidade_var)
-    quantidade_entry.pack()
-
-    lista_pedido = tk.Listbox(janela_pedido)
-    lista_pedido.pack()
-
-    def adicionar_produto():
-        nonlocal quantidade_total
-
-        produto_selecionado = produto_var.get()
-        quantidade = quantidade_var.get()
-
-        if produto_selecionado and quantidade > 0:
-
-            if produto_selecionado in clientes[nome_cliente]["pedido"]:
-                clientes[nome_cliente]["pedido"][produto_selecionado] += quantidade
-            else:
-                clientes[nome_cliente]["pedido"][produto_selecionado] = quantidade
-
-
-            lista_pedido.insert(tk.END, f"{quantidade} X {produto_selecionado}")
-
-            quantidade_total += quantidade
-
-            label_contador.config(text=f"Quantidade total de itens: {quantidade_total}")
-
-            #SALVA OS  DADOS NO JSON
-            salvar_clientes()
-        else:
-            messagebox.showerror("Erro", "Selecione um produto e insira uma quantidade válida!")
-
-    adicionar_prod = tk.Button(janela_pedido, text="Adicionar ao Pedido", command=adicionar_produto)
-    adicionar_prod.pack()
-
-
-    def calcular_total():
-        total = sum(clientes[nome_cliente]["pedido"].values())
-        label_total.config(text=f"Total a pagar: R${total * produtos[produto_var.get()]:.2f}")
-
-    button_calcular = tk.Button(janela_pedido, text="Calcular Total", command=calcular_total)
-    button_calcular.pack()
-
-    label_total = tk.Label(janela_pedido, text="Total a pagar: R$0.00")
-    label_total.pack()
-
-    label_contador = tk.Label(janela_pedido, text="Quantidade total de itens: 0")
-    label_contador.pack()
-
-    def fechar_janela():
-        janela_pedido.destroy()
-
-    fechar_btn = tk.Button(janela_pedido, text="Fechar", command=fechar_janela)
-    fechar_btn.pack()
-
-def visualizar_clientes():
-
-    clientes_info = ""
-    for nome, info in clientes.items():
-        clientes_info += f"\n{nome}: {info['telefone']}, {info['local_entrega']}, {info['data_entrega']} {info['hora_entrega']}"
-
-        if info['pedido']:
-            pedidos_info = "\n  Pedidos:"
-            total_pedido = 0
-            for produto, quantidade in info['pedido'].items():
-                pedidos_info += f"\n    {quantidade} und {produto} - R${produtos[produto] * quantidade:.2f}"
-                total_pedido += produtos[produto] * quantidade
-
-
-            pedidos_info += f"\n  Total do Pedido: R${total_pedido:.2f}"
-            clientes_info += pedidos_info
-        else:
-            clientes_info += "\n  Nenhum pedido registrado."
-
-    if clientes_info:
-        messagebox.showinfo("Clientes e Pedidos", clientes_info)
+    # Atualiza o pedido do cliente
+    if produto in clientes[nome_cliente]["pedido"]:
+        clientes[nome_cliente]["pedido"][produto] += quantidade
     else:
-        messagebox.showinfo("Clientes e Pedidos", "Nenhum cliente cadastrado!")
+        clientes[nome_cliente]["pedido"][produto] = quantidade
 
+    # Recalcula o total_venda
+    clientes[nome_cliente]["total_venda"] = sum(
+        produtos.get(produto, 0) * quantidade for produto, quantidade in clientes[nome_cliente]["pedido"].items()
+    )
 
-#JANELA ROOT
-root = tk.Tk()
-root.title("Cadastro de Clientes e Pedidos de Salgados")
+    salvar_clientes()
+    return redirect(url_for('index'))
 
-#TELAS DE CADASTRO
-label_nome = tk.Label(root, text="Nome:")
-label_nome.grid(row=0, column=0)
-entry_nome = tk.Entry(root)
-entry_nome.grid(row=0, column=1)
-
-label_telefone = tk.Label(root, text="Telefone:")
-label_telefone.grid(row=1, column=0)
-entry_telefone = tk.Entry(root)
-entry_telefone.grid(row=1, column=1)
-
-label_local_entrega = tk.Label(root, text="Local de Entrega:")
-label_local_entrega.grid(row=2, column=0)
-entry_local_entrega = tk.Entry(root)
-entry_local_entrega.grid(row=2, column=1)
-
-label_data_entrega = tk.Label(root, text="Data de Entrega (DD/MM/AAAA):")
-label_data_entrega.grid(row=3, column=0)
-entry_data_entrega = tk.Entry(root)
-entry_data_entrega.grid(row=3, column=1)
-
-label_hora_entrega = tk.Label(root, text="Hora de Entrega (HH:MM):")
-label_hora_entrega.grid(row=4, column=0)
-entry_hora_entrega = tk.Entry(root)
-entry_hora_entrega.grid(row=4, column=1)
-
-btn_cadastrar_cliente = tk.Button(root, text="Cadastrar Cliente", command=cadastrar_cliente)
-btn_cadastrar_cliente.grid(row=5, column=0, columnspan=2)
-
-#JANELA DE  PEDIDOS
-label_cliente_pedido = tk.Label(root, text="Nome do Cliente (para pedido):")
-label_cliente_pedido.grid(row=6, column=0)
-entry_cliente_pedido = tk.Entry(root)
-entry_cliente_pedido.grid(row=6, column=1)
-
-btn_pedido = tk.Button(root, text="Cadastrar Pedido", command=cadastrar_pedido)
-btn_pedido.grid(row=7, column=0, columnspan=2)
-
-#JANELA DE VISUALIZAÇÃO
-btn_visualizar_clientes = tk.Button(root, text="Ver Clientes e Pedidos", command=visualizar_clientes)
-btn_visualizar_clientes.grid(row=8, column=0, columnspan=2)
-
-root.mainloop()
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000)

@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Controle de Pedidos</title>
+</head>
+<body>
+    <h1>Controle de Pedidos</h1>
+
+    <!-- Formulário para cadastrar um novo cliente -->
+    <h2>Cadastrar Cliente</h2>
+    <form action="{{ url_for('cadastrar_cliente') }}" method="POST">
+        <label for="nome">Nome:</label>
+        <input type="text" id="nome" name="nome" required><br><br>
+        <label for="telefone">Telefone:</label>
+        <input type="text" id="telefone" name="telefone" required><br><br>
+        <label for="local_entrega">Local de Entrega:</label>
+        <input type="text" id="local_entrega" name="local_entrega" required><br><br>
+        <label for="data_entrega">Data de Entrega:</label>
+        <input type="date" id="data_entrega" name="data_entrega" required><br><br>
+        <label for="hora_entrega">Hora de Entrega:</label>
+        <input type="time" id="hora_entrega" name="hora_entrega" required><br><br>
+        <input type="submit" value="Cadastrar Cliente">
+    </form>
+
+    <!-- Formulário para cadastrar um pedido -->
+    <h2>Cadastrar Pedido</h2>
+    <form action="{{ url_for('cadastrar_pedido') }}" method="POST">
+        <label for="nome_cliente">Cliente:</label>
+        <select name="nome_cliente" id="nome_cliente">
+            {% for cliente in clientes %}
+                <option value="{{ cliente['nome'] }}">{{ cliente['nome'] }}</option>
+            {% endfor %}
+        </select><br><br>
+
+        <label for="produto">Produto:</label>
+        <select name="produto" id="produto">
+            {% for produto, preco in produtos.items() %}
+                <option value="{{ produto }}">{{ produto }} - R$ {{ preco }}</option>
+            {% endfor %}
+        </select><br><br>
+
+        <label for="quantidade">Quantidade:</label>
+        <input type="number" id="quantidade" name="quantidade" required><br><br>
+
+        <input type="submit" value="Cadastrar Pedido">
+    </form>
+
+    <h2>Clientes Cadastrados</h2>
+    <ul>
+        {% for cliente in clientes %}
+            <li>
+                <strong>{{ cliente['nome'] }}</strong><br>
+                Telefone: {{ cliente['telefone'] }}<br>
+                Local de Entrega: {{ cliente['local_entrega'] }}<br>
+                Data de Entrega: {{ cliente['data_entrega'] }}<br>
+                Hora de Entrega: {{ cliente['hora_entrega'] }}<br>
+                <h4>Pedido:</h4>
+                <ul>
+                    {% for produto, quantidade in cliente['pedido'].items() %}
+                        <li>{{ produto }} - {{ quantidade }} unidades</li>
+                    {% endfor %}
+                </ul>
+                <h4>Total de Produtos: {{ cliente['pedido'].values()|map('int')|sum }}</h4>
+                <h4>Total do Pedido: R$ {{ cliente['total_venda'] | round(2) }}</h4>
+            </li>
+        {% endfor %}
+    </ul>
+    <h2>Total de Produtos Pedidos</h2>
+    <ul>
+        {% for produto, quantidade in quantidade_total_produtos.items() %}
+            <li>{{ produto }}: {{ quantidade }} unidades</li>
+        {% endfor %}
+    </ul>
+
+<h3>Total Geral: R$ {{ total_geral | round(2) }}</h3>
+
+
+    <h3>Total Geral: R$ {{ total_geral | round(2) }}</h3>
+</body>
+</html>
